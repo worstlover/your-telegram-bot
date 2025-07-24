@@ -30,7 +30,7 @@ if not MAIN_ADMIN_ID:
     raise ValueError("MAIN_ADMIN_ID environment variable not set!")
 
 
-NEED_APPROVAL_TEXT = True
+NEED_APPROVAL_TEXT = False
 NEED_APPROVAL_MEDIA = True
 
 logging.basicConfig(level=logging.INFO)
