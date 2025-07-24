@@ -1,33 +1,45 @@
 import logging
 import asyncio
+import os # این خط رو اضافه کنید برای دسترسی به متغیرهای محیطی
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.client.default import DefaultBotProperties # Make sure this is imported
+from aiogram.client.default import DefaultBotProperties
 
 # Assuming badwords.py exists and contains_bad_words is defined there
 from badwords import contains_bad_words
 
 # --- Configuration ---
-API_TOKEN = "8463214619:AAE5HLwJQERrFltZ6cBz7sanSZVOMdwe1D0" # Use your actual token here
-CHANNEL_ID = -1002711756571  # Numerical ID of your channel
-ADMIN_IDS = [6675766939]  # Numerical IDs of your admins
-MAIN_ADMIN_ID = 6675766939 # For logging which admin approved
+# از os.getenv() برای خواندن متغیرهای محیطی استفاده کنید
+# اگر متغیر محیطی ست نشده بود، یک خطا اعلام کنید تا مطمئن بشیم اطلاعات حساس وجود دارند
+API_TOKEN = os.getenv("API_TOKEN")
+if not API_TOKEN:
+    raise ValueError("API_TOKEN environment variable not set!")
 
-NEED_APPROVAL_TEXT = True    # If True, text messages need approval
-NEED_APPROVAL_MEDIA = True   # If True, media also needs approval
+CHANNEL_ID = int(os.getenv("CHANNEL_ID")) # حتما به int تبدیل شود
+ADMIN_IDS_STR = os.getenv("ADMIN_IDS") # ابتدا به صورت رشته میخوانیم
+if not ADMIN_IDS_STR:
+    raise ValueError("ADMIN_IDS environment variable not set!")
+ADMIN_IDS = [int(x.strip()) for x in ADMIN_IDS_STR.split(',')] # با کاما جدا شده و به int تبدیل شود
+
+MAIN_ADMIN_ID = int(os.getenv("MAIN_ADMIN_ID")) # حتما به int تبدیل شود
+if not MAIN_ADMIN_ID:
+    raise ValueError("MAIN_ADMIN_ID environment variable not set!")
+
+
+NEED_APPROVAL_TEXT = True
+NEED_APPROVAL_MEDIA = True
 
 logging.basicConfig(level=logging.INFO)
 
 # Initialize bot and dispatcher
-# --- CORRECTED LINE BELOW ---
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-# --- CORRECTED LINE ABOVE ---
-dp = Dispatcher() # Only one Dispatcher instance
+dp = Dispatcher()
 
-pending_messages = {}  # To hold messages awaiting approval
+pending_messages = {}
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
