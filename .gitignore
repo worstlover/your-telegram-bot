@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-selfcheck.json
+
+# Database files
+*.db
+*.sqlite3
+*.db-journal
+
+# Data and Log files
+data/
+logs/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+
+# Environment variables
+.env
