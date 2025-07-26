@@ -61,7 +61,9 @@ def run_bot():
         if not config.validate():
             sys.exit(1)
 
-        profanity_filter = ProfanityFilter(config.PROFANITY_WORDS_FILE, config.STRICT_FILTERING)
+        # اصلاح این خط: فقط یک آرگومان به سازنده ProfanityFilter ارسال کنید
+        profanity_filter = ProfanityFilter(config.PROFANITY_WORDS_FILE)
+        
         media_manager = MediaManager(config.PENDING_MEDIA_FILE)
         user_manager = UserManager() # Initialize UserManager
 
