@@ -13,11 +13,11 @@ import sys
 from pathlib import Path
 from telegram import Update
 from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    MessageHandler, 
+    Application,
+    CommandHandler,
+    MessageHandler,
     filters,  # Import filters directly
-    CallbackQueryHandler, 
+    CallbackQueryHandler,
     ContextTypes
 )
 # Removed explicit imports like: from telegram.ext.filters import Photo, Video, Audio, Voice, Document, Animation, Sticker
@@ -57,42 +57,37 @@ logger = logging.getLogger(__name__)
 def run_bot():
     """Main function to start the bot"""
     try:
-        # Initialize configuration
         config = Config()
-
-        # Validate required configurations
         if not config.validate():
-            logger.error("Configuration validation failed. Exiting.")
             sys.exit(1)
 
-        # Initialize core components
-        profanity_filter = ProfanityFilter()
+        profanity_filter = ProfanityFilter(config.PROFANITY_WORDS_FILE, config.STRICT_FILTERING)
         media_manager = MediaManager(config.PENDING_MEDIA_FILE)
-        user_manager = UserManager(db_path="data/users.db") # Assuming users.db is in data folder
+        user_manager = UserManager() # Initialize UserManager
 
-        # Initialize handlers
         handlers = BotHandlers(config, profanity_filter, media_manager, user_manager)
 
-        # Build the Telegram Application
         application = Application.builder().token(config.BOT_TOKEN).build()
 
-        # Register handlers
-        # Commands
+        # Command Handlers
         application.add_handler(CommandHandler("start", handlers.start_command))
         application.add_handler(CommandHandler("help", handlers.help_command))
+        application.add_handler(CommandHandler("stats", handlers.stats_command))
         application.add_handler(CommandHandler("set_name", handlers.set_name_command))
-        application.add_handler(CommandHandler("my_name", handlers.my_name_command))
-        application.add_handler(CommandHandler("admin_stats", handlers.admin_stats_command))
-        application.add_handler(CommandHandler("add_profanity", handlers.add_profanity_command))
-        
-        # Command for showing main menu explicitly
-        application.add_handler(CommandHandler("menu", handlers.show_main_menu)) 
+        application.add_handler(CommandHandler("cancel", handlers.cancel_command))
+        application.add_handler(CommandHandler("admin_menu", handlers.admin_menu_command))
+        application.add_handler(CommandHandler("ban", handlers.ban_user_command)) # New ban command handler
+        application.add_handler(CommandHandler("unban", handlers.unban_user_command)) # New unban command handler
+        application.add_handler(CommandHandler("check_ban", handlers.check_ban_command)) # New check ban command handler
+
+        # Menu Handler - useful for showing main menu explicitly
+        application.add_handler(CommandHandler("menu", handlers.show_main_menu))
 
         # Message Handlers for different types of content
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text_message))
         # Corrected: Use filters.ATTACHMENT to cover all media types
         application.add_handler(MessageHandler(filters.ATTACHMENT, handlers.handle_media_message))
-        
+
         # Callback Query Handler for inline buttons (approval and menu interactions)
         application.add_handler(CallbackQueryHandler(handlers.button_callback))
 
@@ -114,10 +109,10 @@ def run_bot():
         logger.error(f"Failed to start bot: {e}")
         sys.exit(1)
 
-if __name__ == '__main__':git add .
+if __name__ == '__main__':
     # Run Flask in a separate thread
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
-    # Run the bot in the main threadزززززز
+    # Run the bot in the main thread
     run_bot()
