@@ -579,6 +579,23 @@ class BotHandlers:
         except TelegramError as e:
             logger.error(f"Failed to send admin menu to chat {chat_id}: {e}")
 
+    # New method to handle /admin_menu command
+    async def admin_menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /admin_menu command to show the admin menu."""
+        user_id = update.effective_user.id
+        if not self.config.is_admin(user_id):
+            if update.message:
+                await update.message.reply_text("شما اجازه دسترسی به این بخش را ندارید.")
+            elif update.callback_query and update.callback_query.message:
+                await update.callback_query.message.reply_text("شما اجازه دسترسی به این بخش را ندارید.")
+            logger.warning(f"Non-admin user {user_id} tried to access /admin_menu.")
+            return
+
+        chat_id = update.effective_chat.id
+        await self.send_admin_menu(chat_id, context)
+        logger.info(f"Admin {user_id} used /admin_menu command.")
+
+
     async def admin_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show bot statistics to admin"""
         user_id = update.effective_user.id
