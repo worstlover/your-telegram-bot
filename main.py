@@ -16,7 +16,7 @@ from telegram.ext import (
     Application, 
     CommandHandler, 
     MessageHandler, 
-    filters, 
+    filters,  # Import filters directly
     CallbackQueryHandler, 
     ContextTypes
 )
@@ -83,14 +83,15 @@ def run_bot():
         application.add_handler(CommandHandler("admin_stats", handlers.admin_stats_command))
         application.add_handler(CommandHandler("add_profanity", handlers.add_profanity_command))
         
-        # New: Command for showing main menu explicitly
+        # Command for showing main menu explicitly
         application.add_handler(CommandHandler("menu", handlers.show_main_menu)) 
 
         # Message Handlers for different types of content
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text_message))
-        application.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.AUDIO | 
-                                               filters.VOICE | filters.DOCUMENT | filters.ANIMATION | 
-                                               filters.STICKER, handlers.handle_media_message))
+        # Corrected: Use filters compatible with python-telegram-bot v20+
+        application.add_handler(MessageHandler(filters.Photo.ALL | filters.Video.ALL | filters.Audio.ALL | 
+                                               filters.Voice.ALL | filters.Document.ALL | filters.Animation.ALL | 
+                                               filters.Sticker.ALL, handlers.handle_media_message))
         
         # Callback Query Handler for inline buttons (approval and menu interactions)
         application.add_handler(CallbackQueryHandler(handlers.button_callback))
