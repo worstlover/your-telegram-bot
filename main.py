@@ -12,7 +12,8 @@ from flask import Flask
 import logging
 import os
 import sys
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
 from config import Config
 from bot_handlers import BotHandlers
@@ -34,7 +35,6 @@ def run_flask():
 # ++++++++++++++++++++++++++++
 
 # Configure logging
-# ... (بقیه کد لاگین شما بدون تغییر باقی می‌ماند)
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -49,50 +49,55 @@ logger = logging.getLogger(__name__)
 def run_bot():
     """Main function to start the bot"""
     try:
-        # ... (تمام کد داخل تابع main شما اینجا قرار می‌گیرد)
         # Initialize configuration
         config = Config()
 
-        # Validate required environment variables
-        if not config.BOT_TOKEN:
-            logger.error("BOT_TOKEN environment variable is required")
-            sys.exit(1)
+        # Validate required configurations
+        if not config.validate():
+            logger.error("Configuration validation failed. Please check your environment variables.")
+            sys.exit(1) # Exit if essential configs are missing
 
-        if not config.CHANNEL_ID:
-            logger.error("CHANNEL_ID environment variable is required")
-            sys.exit(1)
+        # Initialize managers
+        # user_manager: Using default db_path "data/users.db"
+        user_manager = UserManager() 
+        profanity_filter = ProfanityFilter() # Assumes ProfanityFilter initializes with its default path
+        media_manager = MediaManager() # Assumes MediaManager initializes with its default path
 
-        if not config.ADMIN_USER_ID:
-            logger.error("ADMIN_USER_ID environment variable is required")
-            sys.exit(1)
-
-        # Initialize components
-        profanity_filter = ProfanityFilter()
-        media_manager = MediaManager()
-        user_manager = UserManager()
-
-        # Create application
-        application = Application.builder().token(config.BOT_TOKEN).build()
-
-        # Initialize handlers
+        # Initialize BotHandlers with all necessary managers and config
         handlers = BotHandlers(config, profanity_filter, media_manager, user_manager)
 
-        # ... (بقیه کد ثبت هندلرها بدون تغییر)
+        application = Application.builder().token(config.BOT_TOKEN).build()
+
+        # --- Register Handlers ---
+        # Command handlers
         application.add_handler(CommandHandler("start", handlers.start_command))
         application.add_handler(CommandHandler("help", handlers.help_command))
-        application.add_handler(CommandHandler("pending", handlers.pending_command))
         application.add_handler(CommandHandler("stats", handlers.stats_command))
-        application.add_handler(CallbackQueryHandler(handlers.button_callback))
+        application.add_handler(CommandHandler("setname", handlers.set_name_command))
+        
+        # Admin commands
+        application.add_handler(CommandHandler("adminstats", handlers.admin_stats_command, filters=filters.User(config.ADMIN_USER_ID) | filters.User(config.ADDITIONAL_ADMIN_IDS)))
+        application.add_handler(CommandHandler("approveall", handlers.approve_all_command, filters=filters.User(config.ADMIN_USER_ID) | filters.User(config.ADDITIONAL_ADMIN_IDS)))
+        application.add_handler(CommandHandler("rejectall", handlers.reject_all_command, filters=filters.User(config.ADMIN_USER_ID) | filters.User(config.ADDITIONAL_ADMIN_IDS)))
+        application.add_handler(CommandHandler("clearqueue", handlers.clear_queue_command, filters=filters.User(config.ADMIN_USER_ID) | filters.User(config.ADDITIONAL_ADMIN_IDS)))
+        
+        # Message handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text_message))
-        application.add_handler(MessageHandler(filters.PHOTO, handlers.handle_media_message))
-        application.add_handler(MessageHandler(filters.VIDEO, handlers.handle_media_message))
-        # ... (الی آخر)
+        # Filters for different media types (if handled by handle_media_message)
+        application.add_handler(MessageHandler(
+            filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.VOICE | filters.DOCUMENT | filters.ANIMATION | filters.STICKER,
+            handlers.handle_media_message
+        ))
+        
+        # Callback query handler for inline keyboard buttons (e.g., admin approvals)
+        application.add_handler(CallbackQueryHandler(handlers.handle_admin_callback))
 
-        from telegram.ext import ContextTypes as CT
-        from telegram import Update
-        async def error_callback(update: object, context: CT.DEFAULT_TYPE) -> None:
+        # Error handler
+        async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
             if isinstance(update, Update):
-                await handlers.error_handler(update, context)
+                await handlers.error_handler(update, context) # Assuming error_handler is in BotHandlers
+            else:
+                logger.error(f"An error occurred (no Update object): {context.error}")
 
         application.add_error_handler(error_callback)
 
@@ -101,20 +106,16 @@ def run_bot():
         logger.info(f"Admin User ID: {config.ADMIN_USER_ID}")
 
         # Start the bot
-        application.run_polling(allowed_updates=["message", "callback_query"])
-
+        application.run_polling(allowed_updates=Update.ALL_TYPES) # Use Update.ALL_TYPES for broader updates
+        
     except Exception as e:
         logger.error(f"Failed to start bot: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':
-    # main() # <--- این خط رو کامنت یا حذف کنید
-
-    # +++ REPLACE with these lines to run both Flask and the Bot +++
-    # Run Flask in a separate thread
+    # Run Flask in a separate thread to keep the bot alive on Render
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
     # Run the bot in the main thread
     run_bot()
-    # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

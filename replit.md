@@ -14,11 +14,11 @@ Preferred communication style: Simple, everyday language.
 - **Language**: Python 3.x
 - **Framework**: python-telegram-bot library for Telegram API integration
 - **Architecture Pattern**: Modular component-based design with separation of concerns
-- **Data Storage**: PostgreSQL database for user profiles and persistent data; JSON files for pending media
+- **Data Storage**: SQLite database for user profiles and persistent data; JSON files for pending media
 - **Logging**: File and console logging with configurable levels
 
 ### Key Design Decisions
-- **Hybrid storage**: PostgreSQL database for user profiles and persistent data; JSON files for temporary pending media queue
+- **Hybrid storage**: SQLite database for user profiles and persistent data; JSON files for temporary pending media queue
 - **Modular design**: Separate classes for different concerns (handlers, filtering, media management, user management, configuration)
 - **Multi-language support**: Built-in support for Persian, English, and Persian-Latin profanity filtering
 - **Admin approval workflow**: Manual moderation system for media content to ensure quality control
@@ -51,7 +51,7 @@ Preferred communication style: Simple, everyday language.
 - JSON-based persistence for pending items
 
 ### 5. User Manager (`user_manager.py`)
-- PostgreSQL database integration for user profiles
+- SQLite database integration for user profiles
 - Display name management and validation
 - User registration and auto-numbering system
 - Message count tracking and user statistics
@@ -114,13 +114,14 @@ Preferred communication style: Simple, everyday language.
 ## Deployment Strategy
 
 ### File Structure Requirements
-```
+
 data/
 ├── pending_media.json     # Media approval queue
 └── profanity_words.json   # Profanity word lists
+└── users.db               # SQLite database for user data (newly added)
 logs/
 └── bot.log               # Application logs
-```
+
 
 ### Deployment Options
 - **Simple VPS**: Single Python process with file-based storage
@@ -138,21 +139,3 @@ logs/
 - Admin commands for operational monitoring
 - JSON-based data backup and recovery
 
-## Notable Features
-
-### Multi-language Profanity Detection
-- Supports Persian script, English, and Persian-Latin transliterations
-- Regex-based pattern matching for efficient filtering
-- Customizable word lists through JSON configuration
-
-### Admin Moderation System
-- Inline keyboard-based approval interface
-- Support for multiple administrators
-- Audit trail for all moderation decisions
-- Bulk operations for queue management
-
-### Robust Error Handling
-- Comprehensive logging throughout the application
-- Graceful handling of Telegram API errors
-- Data persistence protection with atomic operations
-- Configuration validation on startup
