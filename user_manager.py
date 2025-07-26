@@ -5,6 +5,7 @@ User management for handling display names and user data using SQLite
 import sqlite3
 import logging
 import os
+import time # Add this line
 from typing import Optional, Tuple, Dict
 from dataclasses import dataclass
 from pathlib import Path
@@ -161,7 +162,7 @@ class UserManager:
         try:
             with self._get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("UPDATE users SET message_count = message_count + 1 WHERE user_id = ?", (user_id,))
+                cur.execute("UPDATE users SET message_count = message_count + 1 WHERE user_id = ?", (user_id,))\
                 conn.commit()
         except Exception as e:
             logger.error(f"Error incrementing message count for user {user_id}: {e}")
