@@ -16,10 +16,13 @@ from telegram.ext import (
     Application, 
     CommandHandler, 
     MessageHandler, 
-    filters,  # Import filters directly
+    filters, # Keep this import for filters.TEXT, filters.COMMAND
     CallbackQueryHandler, 
     ContextTypes
 )
+# Explicitly import individual media filter types
+from telegram.ext.filters import Photo, Video, Audio, Voice, Document, Animation, Sticker
+
 
 from config import Config
 from bot_handlers import BotHandlers
@@ -88,10 +91,10 @@ def run_bot():
 
         # Message Handlers for different types of content
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text_message))
-        # Corrected: Use filters compatible with python-telegram-bot v20+
-        application.add_handler(MessageHandler(filters.Photo.ALL | filters.Video.ALL | filters.Audio.ALL | 
-                                               filters.Voice.ALL | filters.Document.ALL | filters.Animation.ALL | 
-                                               filters.Sticker.ALL, handlers.handle_media_message))
+        # Corrected: Use explicitly imported filter types
+        application.add_handler(MessageHandler(Photo.ALL | Video.ALL | Audio.ALL | 
+                                               Voice.ALL | Document.ALL | Animation.ALL | 
+                                               Sticker.ALL, handlers.handle_media_message))
         
         # Callback Query Handler for inline buttons (approval and menu interactions)
         application.add_handler(CallbackQueryHandler(handlers.button_callback))
