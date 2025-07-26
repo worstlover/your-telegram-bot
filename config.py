@@ -43,11 +43,17 @@ class Config:
         return user_id == self.ADMIN_USER_ID or user_id in self.ADDITIONAL_ADMIN_IDS
     
     def validate(self) -> bool:
-        """Validate configuration"""
+        """Validate that all required configuration variables are set"""
         if not self.BOT_TOKEN:
+            print("Error: BOT_TOKEN is not set.")
             return False
         if not self.CHANNEL_ID:
+            print("Error: CHANNEL_ID is not set.")
             return False
         if self.ADMIN_USER_ID == 0:
+            print("Error: ADMIN_USER_ID is not set or is 0.")
+            return False
+        if not self.CHANNEL_ID.startswith('@'):
+            print("Error: CHANNEL_ID must start with '@'. Example: @your_channel_username")
             return False
         return True
