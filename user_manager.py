@@ -162,8 +162,8 @@ class UserManager:
         try:
             with self._get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("UPDATE users SET message_count = message_count + 1 WHERE user_id = ?", (user_id,))\
-                conn.commit()
+                cur.execute("UPDATE users SET message_count = message_count + 1 WHERE user_id = ?", (user_id,))
+                conn.commit() # Removed the backslash here
         except Exception as e:
             logger.error(f"Error incrementing message count for user {user_id}: {e}")
 
