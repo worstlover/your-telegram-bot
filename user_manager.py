@@ -21,6 +21,7 @@ class UserProfile:
     user_number: int
     registration_date: str
     message_count: int = 0
+    is_banned: bool = False # Added is_banned attribute
 
 class UserManager:
     """Manager for handling user profiles and display names with SQLite"""
@@ -39,7 +40,7 @@ class UserManager:
         return sqlite3.connect(self.db_path)
 
     def init_database(self):
-        """Initialize database table"""
+        """Initialize database table and add is_banned column if not exists"""
         try:
             with self._get_connection() as conn:
                 cur = conn.cursor()
@@ -50,111 +51,109 @@ class UserManager:
                         display_name TEXT UNIQUE,
                         user_number INTEGER UNIQUE,
                         registration_date TEXT,
-                        message_count INTEGER DEFAULT 0
+                        message_count INTEGER DEFAULT 0,
+                        is_banned INTEGER DEFAULT 0 -- Added is_banned column
                     )
                 """)
+                # Add 'is_banned' column if it doesn't exist (for existing databases)
+                try:
+                    cur.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+                    logger.info("Added 'is_banned' column to 'users' table.")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name: is_banned" in str(e):
+                        logger.info("'is_banned' column already exists in 'users' table.")
+                    else:
+                        raise e # Re-raise other operational errors
+
                 conn.commit()
+            logger.info("Database initialized successfully.")
         except Exception as e:
             logger.error(f"Error initializing database: {e}")
 
+
+    def _get_next_user_number(self) -> int:
+        """Get the next available sequential user number"""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT MAX(user_number) FROM users")
+            max_number = cur.fetchone()[0]
+            return (max_number or 0) + 1
+
     def register_user(self, user_id: int, telegram_username: str) -> UserProfile:
         """Register a new user or return existing profile"""
-        user_profile = self.get_user_profile(user_id)
-        if user_profile:
-            return user_profile
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+            user_data = cur.fetchone()
 
-        try:
-            with self._get_connection() as conn:
-                cur = conn.cursor()
-                
-                # Get the next available user number
-                cur.execute("SELECT MAX(user_number) FROM users")
-                last_user_number = cur.fetchone()[0]
-                new_user_number = (last_user_number or 0) + 1
-                
-                display_name = f"کاربر شماره {new_user_number}"
-                registration_date = str(int(time.time())) # Unix timestamp
-                
-                cur.execute(
-                    "INSERT INTO users (user_id, telegram_username, display_name, user_number, registration_date) VALUES (?, ?, ?, ?, ?)",
-                    (user_id, telegram_username, display_name, new_user_number, registration_date)
+            if user_data:
+                # User already exists, return existing profile
+                return UserProfile(
+                    user_id=user_data[0],
+                    telegram_username=user_data[1],
+                    display_name=user_data[2],
+                    user_number=user_data[3],
+                    registration_date=user_data[4],
+                    message_count=user_data[5],
+                    is_banned=bool(user_data[6]) # Convert integer to boolean
                 )
-                conn.commit()
-                logger.info(f"Registered new user: {user_id} with display name {display_name}")
-                return UserProfile(user_id, telegram_username, display_name, new_user_number, registration_date)
-        except sqlite3.IntegrityError as e:
-            logger.warning(f"User {user_id} already exists or display name/user number conflict: {e}")
-            # If there's an integrity error, try to fetch the existing user
-            return self.get_user_profile(user_id)
-        except Exception as e:
-            logger.error(f"Error registering user {user_id}: {e}")
-            # Fallback to a basic profile if DB fails
-            return UserProfile(user_id, telegram_username, "Unknown User", 0, str(int(time.time())))
+            else:
+                # Register new user
+                user_number = self._get_next_user_number()
+                display_name = f"کاربر شماره {user_number}"
+                registration_date = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+                try:
+                    cur.execute(
+                        "INSERT INTO users (user_id, telegram_username, display_name, user_number, registration_date, message_count, is_banned) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (user_id, telegram_username, display_name, user_number, registration_date, 0, 0)
+                    )
+                    conn.commit()
+                    logger.info(f"New user registered: {user_id} ({telegram_username}) as '{display_name}'")
+                    return UserProfile(user_id, telegram_username, display_name, user_number, registration_date, 0, False)
+                except sqlite3.IntegrityError as e:
+                    logger.error(f"Integrity error during user registration for {user_id}: {e}")
+                    # This can happen if user_number or display_name unique constraint fails (rare but possible)
+                    # Try to re-register with a new number or handle appropriately
+                    conn.rollback()
+                    return self.register_user(user_id, telegram_username) # Recursive call, be careful with infinite loops
+
 
     def get_user_profile(self, user_id: int) -> Optional[UserProfile]:
         """Get user profile by user ID"""
-        try:
-            with self._get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT user_id, telegram_username, display_name, user_number, registration_date, message_count FROM users WHERE user_id = ?", (user_id,))
-                row = cur.fetchone()
-                if row:
-                    return UserProfile(*row)
-            return None
-        except Exception as e:
-            logger.error(f"Error getting user profile for {user_id}: {e}")
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+            user_data = cur.fetchone()
+            if user_data:
+                return UserProfile(
+                    user_id=user_data[0],
+                    telegram_username=user_data[1],
+                    display_name=user_data[2],
+                    user_number=user_data[3],
+                    registration_date=user_data[4],
+                    message_count=user_data[5],
+                    is_banned=bool(user_data[6])
+                )
             return None
 
     def set_display_name(self, user_id: int, new_name: str) -> bool:
-        """Set a new display name for the user"""
-        # Check for existing display name
-        if self.get_user_profile_by_display_name(new_name):
-            return False # Name already taken
-
-        try:
-            with self._get_connection() as conn:
-                cur = conn.cursor()
+        """Set user's display name, returns True on success, False if name is taken"""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            try:
                 cur.execute("UPDATE users SET display_name = ? WHERE user_id = ?", (new_name, user_id))
                 conn.commit()
-                if cur.rowcount > 0:
-                    logger.info(f"User {user_id} set display name to '{new_name}'")
-                    return True
+                return True
+            except sqlite3.IntegrityError:
+                # display_name is UNIQUE, so this means the new_name is already taken
                 return False
-        except sqlite3.IntegrityError:
-            # This handles cases where another user might try to set the same unique name concurrently
-            logger.warning(f"Attempt to set duplicate display name '{new_name}' for user {user_id}")
-            return False
-        except Exception as e:
-            logger.error(f"Error setting display name for user {user_id}: {e}")
-            return False
 
-    def get_user_profile_by_display_name(self, display_name: str) -> Optional[UserProfile]:
-        """Get user profile by display name"""
-        try:
-            with self._get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT user_id, telegram_username, display_name, user_number, registration_date, message_count FROM users WHERE display_name = ?", (display_name,))
-                row = cur.fetchone()
-                if row:
-                    return UserProfile(*row)
-            return None
-        except Exception as e:
-            logger.error(f"Error getting user profile by display name '{display_name}': {e}")
-            return None
-            
-    def get_display_name(self, user_id: int) -> Optional[str]:
-        """Get user's current display name"""
-        profile = self.get_user_profile(user_id)
-        return profile.display_name if profile else None
-
-    # New methods for managing name setting mode
-    def set_user_setting_name_mode(self, user_id: int, setting: bool):
-        """Set the user's name setting mode."""
-        self._setting_name_cache[user_id] = setting
-        logger.debug(f"User {user_id} setting name mode set to {setting}")
+    def set_user_setting_name_mode(self, user_id: int, mode: bool):
+        """Set a flag indicating if the user is currently in name setting mode"""
+        self._setting_name_cache[user_id] = mode
 
     def is_user_setting_name_mode(self, user_id: int) -> bool:
-        """Check if a user is currently in name setting mode."""
+        """Check if a user is currently in name setting mode"""
         return self._setting_name_cache.get(user_id, False)
 
     def increment_message_count(self, user_id: int):
@@ -163,7 +162,7 @@ class UserManager:
             with self._get_connection() as conn:
                 cur = conn.cursor()
                 cur.execute("UPDATE users SET message_count = message_count + 1 WHERE user_id = ?", (user_id,))
-                conn.commit() # Removed the backslash here
+                conn.commit()
         except Exception as e:
             logger.error(f"Error incrementing message count for user {user_id}: {e}")
 
@@ -190,3 +189,51 @@ class UserManager:
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
             return {"total_users": 0, "custom_names": 0, "default_names": 0, "total_messages": 0}
+
+    #region Ban Management Methods (Added to fix missing attributes)
+
+    def is_user_banned(self, user_id: int) -> bool:
+        """Check if a user is banned"""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT is_banned FROM users WHERE user_id = ?", (user_id,))
+            result = cur.fetchone()
+            if result:
+                return bool(result[0]) # Convert integer (0 or 1) to boolean
+            return False # User not found or not banned by default
+
+    def ban_user(self, user_id: int) -> bool:
+        """Ban a user"""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
+                conn.commit()
+                if cur.rowcount > 0:
+                    logger.info(f"User {user_id} banned successfully.")
+                    return True
+                else:
+                    logger.warning(f"User {user_id} not found in database for banning.")
+                    return False
+            except Exception as e:
+                logger.error(f"Error banning user {user_id}: {e}")
+                return False
+
+    def unban_user(self, user_id: int) -> bool:
+        """Unban a user"""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("UPDATE users SET is_banned = 0 WHERE user_id = ?", (user_id,))
+                conn.commit()
+                if cur.rowcount > 0:
+                    logger.info(f"User {user_id} unbanned successfully.")
+                    return True
+                else:
+                    logger.warning(f"User {user_id} not found in database for unbanning.")
+                    return False
+            except Exception as e:
+                logger.error(f"Error unbanning user {user_id}: {e}")
+                return False
+
+    #endregion
