@@ -114,10 +114,10 @@ def run_bot():
         logger.error(f"Failed to start bot: {e}")
         sys.exit(1)
 
-if __name__ == '__main__':
+if __name__ == '__main__':git add .
     # Run Flask in a separate thread
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
-    # Run the bot in the main thread
+    # Run the bot in the main threadزززززز
     run_bot()
